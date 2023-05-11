@@ -1,62 +1,107 @@
 
-###
-### Build  a table with info about variables to create the excel file with group names
-###
+#' Build a table with information about variables in a data frame
+#' May be useful when, given a dataset, one wishes to create a table
+#' that will be later used to define subroups
+#'
+#' The function returns a data frame with 
+#' - the index, 
+#' - name, 
+#' - class and
+#' -  type of each variable in a data frame.
+#' The type of a variable is determined based on whether it is a factor/character or not.
+#' 
+#' @param x A data frame containing the variables to be analyzed.
+#'
+#' @return A data frame with the index, name, class and type of each variable in the data frame.
+#' @export
+#' 
+#' @examples
+#' varsTable(iris)
+#' 
 varsTable <- function(x){
   index <- 1:ncol(x)
   vars <- colnames(x)
   clase <- sapply(x, class)
-  tipo <- sapply(x, function (column) ifelse (is.factor(column) | is.character(column), "n", "c"))
-  df <- data.frame(index=index, vars=vars, clase=clase, tipo=tipo, Group="pendingDefinition")
+  tipo <- sapply(x, function (column) 
+    ifelse (is.factor(column) | is.character(column), "n", "c"))
+  df <- data.frame(index=index, vars=vars, 
+                   clase=clase, tipo=tipo, 
+                   Group="pendingDefinition")
+  df
 }
 
-###
-### Return the subset of variables (columns) associated with a given label
-###
+#' Extract the subset of variables associated with a given label.
+#'
+#' This function returns the variable names associated with a given label in a data frame.
+#' 
+#' @param varsAndGroupsDF A data frame with the variables and their associated labels.
+#' @param label The label for which we want to extract the variables.
+#'
+#' @return A character vector with the names of the variables associated with the given label.
+#' @export
+#' 
+#' @examples
+#' varsAndGroupsDF <- varsTable(iris) 
+#' varsAndGroupsDF$Group <- c(rep("Sepal",2),rep("Petal",2), "Species")
+#' extractVarNames(varsAndGroupsDF, "Sepal")
+#' 
 extractVarNames <- function(varsAndGroupsDF, label){
   return(with(varsAndGroupsDF, vars[Group==label]))
 }
 
-###
-### Create the groups of objects that may be used to run a multiple Factor Analysis on a dataset
-###
-creaGrups <- function (myDf, GroupsNames){
+
+#' Create the groups of variables that may be used 
+#' to run a multiple Factor Analysis on a dataset.
+#'
+#' This function creates groups of variables based on 
+#' - their type (numeric or categorical) and 
+#' - their associated labels.
+#' The resulting groups are suitable for running a multiple Factor Analysis on the data.
+#' 
+#' @param myDf A data frame with the variables to be analyzed.
+#' @param GroupsNames A data frame with the variables and their associated labels.
+#' 
+#' @return A list containing the data frames of each group of variables, the names and sizes of the groups, and the types of the groups.
+#' @export
+#' 
+#' @examples
+#' data(iris)
+#' varsAndGroupsDF <- varsTable(iris) 
+#' varsAndGroupsDF$Group <- c(rep("Sepal",2),rep("Petal",2), "Species")
+#' GroupsNames <-varsAndGroupsDF[,c("vars", "Group")] 
+#' groups <- creaGrups(iris, GroupsNames)
+#'
+
+creaGrups <- function(myDf, GroupsNames) {
   tipoDatos <- sapply(myDf, class)
-  myVarsNames <- data.frame(idx =1:ncol(myDf), 
-                            vars = colnames(myDf),
-                            clase = tipoDatos)
-  varsAndGroups <- left_join(myVarsNames, GroupsNames, by="vars") %>%
-    select(index, vars, clase.x, Group, tipo)
-  groupsOfVars <- as.data.frame.matrix(as.table(with(varsAndGroups,
-                                                     table(Group, tipo)))) 
-  groupTypes <- groupsOfVars$varTypes <- 
-    colnames(groupsOfVars)[apply(groupsOfVars, 1, function(r) which (r > 0))]
-  numericCols <- 1:(ncol(groupsOfVars)-1)
-  numGroups <-  groupsOfVars$sizes <-  rowSums(groupsOfVars[,numericCols])
+  myVarsNames <- data.frame(vars = colnames(myDf), clase = tipoDatos)
+  varsAndGroups <- left_join(myVarsNames, GroupsNames, by = "vars") %>%
+    select(vars, clase, Group)
+  groupsOfVars <- as.data.frame.matrix(table(varsAndGroups$Group, varsAndGroups$clase))
+  groupTypes <- colnames(groupsOfVars)[apply(groupsOfVars, 1, function(r) which(r > 0))]
+  numericCols <- which(colSums(groupsOfVars[, groupTypes, drop = FALSE]) > 0)
+  numGroups <- rowSums(groupsOfVars[, numericCols, drop = FALSE])
   groupNames <- rownames(groupsOfVars)
-  groupsOfVars <- groupsOfVars |> dplyr::select(sizes, varTypes)
+  groupsOfVars <- groupsOfVars[, groupTypes, drop = FALSE]
   listOfVars <- list()
-  for (i in 1:length(groupNames)){
-    listOfVars [[i]]<- list (vars =extractVarNames(varsAndGroups,
-                                                   groupNames[i]), 
-                             num =groupsOfVars$sizes[i] , 
-                             name = groupNames[i], 
-                             # type = groupsOfVars$varTypes[1] )
-                             type = groupsOfVars$varTypes[[i]][1] )  ### ARA SÍ!!!!
+  for (i in 1:length(groupNames)) {
+    listOfVars[[i]] <- list(vars = extractVarNames(varsAndGroups, groupNames[i]),
+                            num = numGroups[i],
+                            name = groupNames[i],
+                            type = groupTypes[i])
   }
   names(listOfVars) <- groupNames
-  listOfDatasets<- list()
-  for (i in 1:length(listOfVars)){
-    listOfDatasets[[i]] <- myDf[, listOfVars[[i]][[1]]]
-  }
+  listOfDatasets <- lapply(listOfVars, function(varsList) myDf[, varsList$vars, drop = FALSE])
   names(listOfDatasets) <- names(listOfVars)
-  return(list(groupsData=listOfDatasets, groupsVars=listOfVars, 
-              groupsNames=groupNames, groupsSizes=numGroups, groupTypes=groupTypes))
+  return(list(groupsData = listOfDatasets, groupsVars = listOfVars,
+              groupsNames = groupNames, groupsSizes = numGroups, groupTypes = groupTypes))
 }
+
 
 ### 
 ### checkFactorialStructure of the created groups object
 ###
+
 showGroupsinList <- function(alistOfVars){
   for (i in 1:length(alistOfVars)){
     cat(names(alistOfVars[i]), "\n")
@@ -177,8 +222,8 @@ extractGroup <- function (x, pos, vecOfSizes){
       last <- sum(vecOfSizes[1:pos])
     }
   }
-  groupData <- x %>%
-    as.data.frame.array() %>%
+  groupData <- x |>
+    as.data.frame.array() |>
     dplyr::select (first:last)
   return(groupData)
 }
