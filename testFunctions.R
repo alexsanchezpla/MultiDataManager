@@ -1,6 +1,6 @@
 library(dplyr)
 
-source("C:/Users/Usuario/Nuevo Equipo VHIR10 Dropbox/Alex al VHIR/SotaCV/MultiDataManager/prepare4MFA.R", echo=TRUE)
+source("prepare4MFA.R")
 
 # Toy dataset: 
 # 3 groups:
@@ -18,3 +18,14 @@ X <- data.frame(gender, atRisk, grup1, grup2)
 rownames(X)<- paste("ind",1:nrow(X), sep="_")
 
 
+# varsTable
+
+varsTable(X)
+
+# They are all numerical but, the groups are defined as follows
+
+grups <- c(rep("clin",2), rep("microb",3), rep("metab", 3))
+
+groupNames <- varsTable(X)
+groupNames$Group <- grups
+groupNames

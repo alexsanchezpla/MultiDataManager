@@ -1,0 +1,118 @@
+---
+title: "Preparing data for MFA"
+author: "Alex Sanchez"
+format:
+    html: 
+      toc: true
+      toc-depth: 3
+editor_options: 
+  chunk_output_type: console
+---
+
+# Introduction
+
+This document is intended to show how the different functions in the `MultiDataManager` package that can be used to prepare a dataset for a multivariate exploration using `FactoMineR`.
+
+
+## A toy dataset
+
+To apply MFA. a dataset decomposed in several groups of, possibly distinct data types, has to be provided.
+
+We start creating a toy dataset  whose multimodal structure is clear. The dataset has three groups:
+
+- Clin var; Categorical; 2 vars
+- Microbiome; frequencies; 3 vars
+- Metabolites; continuous; 3 vars
+
+```{r}
+numInds <- 10; set.seed=1234
+gender <- sample(c(1,2), rep=TRUE, size=numInds)|>
+          as.factor()
+atRisk <- sample(c(0,1), rep=TRUE, size=numInds, 
+                 prob = c(0.8,0.2)) |> as.factor()
+dataset1<- round(t(rmultinom(numInds, size = 12, 
+                             prob = c(0.1,0.2,0.8)))/10,
+                 3)
+colnames(dataset1) <- c("mic1", "mic2", "mic3")
+dataset2 <- round(matrix(rnorm(mean=0, sd=2, 3*numInds),
+                         nrow=numInds),2)
+colnames(dataset2) <- c("X1", "X2", "X3")
+X <- data.frame(gender, atRisk, dataset1, dataset2)
+rownames(X)<- paste("ind",1:nrow(X), sep="_")
+X
+```
+
+## Groups definition
+
+In order to apply MFA one need to provide:
+
+1. A matrix
+
+2. A vector of groups definition
+
+- Its components indicate the number of groups
+- Their values indicate the number of variables in each group.
+  
+In this example it would be:
+
+```{r}
+grupSizes <- c(2,3,3)
+```
+
+3. A vector indicating the type of each group.It can be:
+
+- categorical ("n", for nominal)
+- frequencies ("f", for frequencies)
+- numerical ("c" for continuos)
+- scaled ("s", for continuos and scaled variables )
+
+```{r}
+grupTypes <- c("n", "f", "c")
+```
+
+
+4. A vector of group names
+
+```{r}
+grupNames <- c("clin", "mic", "met")
+```
+
+With these values a MFA could be performed on X (not shown)
+
+```{r eval=FALSE}
+library(FactoMineR)
+res <- MFA (base=X, group = grupSizes, 
+            type=grupTypes,
+            name.group = grupNames)
+```
+
+## Facilitating Groups definition and management
+
+The definition of groups may be provided but, eventually, it may be interesting to be able to identify them automatically from the data. This may be useful especially, when ...
+- datasets are big, or 
+- data column's order does not correspond to groups order, or 
+- groups are not necessarily clear and one might want to re-define them or work with different groupings.
+
+In situations like these, it may be helpful that groups definition is managed "off the matrix". This may be done by:
+
+- Creating/Maintaining a table whose rownames are the column names (in the same order) of the dataset. It would be similar to the relation between "assayData" and "phenoData" in `expressionSet`s.
+- Using this table to keep updated information of each variable's name, type and group (or groups if several grouping are possible).
+
+Such table may facilitate, not only to create and maintain one grouping but also may easily allow to change it into new groups or even types.
+
+The functions described here are intended to facilitate:
+
+- The creation, from the data matrix, of a precursor for the groups table which will contain information about the variables, but not the groups, that have to be manually added.
+- The creation, from the data matrix and the groups table,  of the groups (sizes, types and names).
+- The creation ("subsetting") of separate datasets corresponding to each group.
+
+
+# Managing groups of data
+
+## Creating a Groups Table 
+
+The key structure for being able to define or eventually re-structure the groups in our multimodal dataset is what is called a "Groups Table".
+
+  - For Bioconductor users this is very similar to the `PhenoData` structure in an `ExpressionSet` or `SummarizedExperiment`.
+  - Future versions of the package may rely on `SummarizedExperiment`or `MultiAssayExperiment` classes to obtain more robustness (e.g. avoid desynchronization bvbetween the data matrix and the Groups Table.
+
